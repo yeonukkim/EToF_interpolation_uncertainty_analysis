@@ -1,11 +1,7 @@
 ---
 title: "interpolation uncertainty analysis"
 author: "Yeonuk Kim"
-<<<<<<< HEAD
 output: github_document
-=======
-output: html_notebook
->>>>>>> 7e2cf5e75ae3803848bf4073c8c838ee9b7fea58
 ---
 
 ## Data preparation
