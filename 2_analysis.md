@@ -72,7 +72,7 @@ meta_use <- meta %>%
     mutate(is_crop = ifelse(class1 == "Croplands",TRUE,FALSE),
                  class1 = factor(class1,
                                                 levels = c("Croplands","Mixed Forests","Evergreen Forests",
-                                                                     "Shrublands","Grasslands","Wetland/Riparina",""))
+                                                                     "Shrublands","Grasslands","Wetland/Riparian",""))
                  )
 
 df <- df %>% left_join(meta_use)
@@ -214,7 +214,7 @@ df <- df %>%
                  )
 ```
 
-## Normalized RMSE
+## number of data
 
 ``` r
 for(i in c(0:32)){
@@ -224,15 +224,6 @@ for(i in c(0:32)){
         group_by(class1) %>%
         filter(nearest_distance == i & ET_OBS == T & !is.na(GF_geeSEBAL)) %>%
         summarise(ETm = mean(ET_corr,na.rm=T),
-                            
-                            geeSEBAL = rmse(ET_corr,GF_geeSEBAL)/ETm,
-                            PT.JPL = rmse(ET_corr,GF_PT.JPL)/ETm,
-                            SSEBop = rmse(ET_corr,GF_SSEBop)/ETm,
-                            eeMETRIC = rmse(ET_corr,GF_eeMETRIC)/ETm,
-                            DisALEXI = rmse(ET_corr,GF_DisALEXI)/ETm,
-                            SIMS = rmse(ET_corr,GF_SIMS)/ETm,
-                            Ensemble = rmse(ET_corr,GF_Ensemble)/ETm,
-                            
                             distance = i,
                             n = n()
         ) 
@@ -245,68 +236,36 @@ for(i in c(0:32)){
 }
 
 result %>%
-    select(!n) %>%
-    select(!ETm) %>%
-    gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
-    mutate(model = factor(model,
-                                                levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
-                                                                     "eeMETRIC","DisALEXI","SIMS"))
-                 ) %>%
-    ggplot(aes(distance,nRMSE*100,color = model, shape=model)) +
+    ggplot(aes(distance,n)) +
     geom_line() + 
     geom_point() +
     theme_bw() +
     labs(
-        y = "Normalized RMSE (%)", 
+        y = "number of data", 
         x = "Temporal distance from satellite (days)"
     ) +
+    scale_y_log10()+
     facet_wrap(~class1, scales = "free_y")
 ```
-
-    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
-    ## than 6 becomes difficult to discriminate
-    ## ℹ you have requested 7 values. Consider specifying shapes manually if you need
-    ##   that many have them.
-
-    ## Warning: Removed 165 rows containing missing values or values outside the scale range
-    ## (`geom_line()`).
-
-    ## Warning: Removed 198 rows containing missing values or values outside the scale range
-    ## (`geom_point()`).
 
 ![](2_analysis_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
 
 ``` r
 result %>%
-    filter(class1 == "Croplands") %>%
-    select(!n) %>%
-    select(!ETm) %>%
-    gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
-    mutate(model = factor(model,
-                                                levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
-                                                                     "eeMETRIC","DisALEXI","SIMS"))
-                 ) %>%
-    ggplot(aes(distance,nRMSE*100,color = model, shape=model)) +
+    ggplot(aes(distance, ETm)) +
     geom_line() + 
     geom_point() +
     theme_bw() +
     labs(
-        y = "Normalized RMSE (%)", 
+        y = "mean ET (mm/day)", 
         x = "Temporal distance from satellite (days)"
-    )
+    ) +
+    facet_wrap(~class1, scales = "free_y")
 ```
-
-    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
-    ## than 6 becomes difficult to discriminate
-    ## ℹ you have requested 7 values. Consider specifying shapes manually if you need
-    ##   that many have them.
-
-    ## Warning: Removed 33 rows containing missing values or values outside the scale range
-    ## (`geom_point()`).
 
 ![](2_analysis_files/figure-gfm/unnamed-chunk-4-2.png)<!-- -->
 
-## Normalized MAE
+## correlation
 
 ``` r
 for(i in c(0:32)){
@@ -317,13 +276,13 @@ for(i in c(0:32)){
         filter(nearest_distance == i & ET_OBS == T & !is.na(GF_geeSEBAL)) %>%
         summarise(ETm = mean(ET_corr,na.rm=T),
                             
-                            geeSEBAL = mae(ET_corr,GF_geeSEBAL)/ETm,
-                            PT.JPL = mae(ET_corr,GF_PT.JPL)/ETm,
-                            SSEBop = mae(ET_corr,GF_SSEBop)/ETm,
-                            eeMETRIC = mae(ET_corr,GF_eeMETRIC)/ETm,
-                            DisALEXI = mae(ET_corr,GF_DisALEXI)/ETm,
-                            SIMS = mae(ET_corr,GF_SIMS)/ETm,
-                            Ensemble = mae(ET_corr,GF_Ensemble)/ETm,
+                            geeSEBAL = cor(ET_corr,GF_geeSEBAL),
+                            PT.JPL = cor(ET_corr,GF_PT.JPL),
+                            SSEBop = cor(ET_corr,GF_SSEBop),
+                            eeMETRIC = cor(ET_corr,GF_eeMETRIC),
+                            DisALEXI = cor(ET_corr,GF_DisALEXI),
+                            SIMS = cor(ET_corr,GF_SIMS),
+                            Ensemble = cor(ET_corr,GF_Ensemble),
                             
                             distance = i,
                             n = n()
@@ -339,17 +298,17 @@ for(i in c(0:32)){
 result %>%
     select(!n) %>%
     select(!ETm) %>%
-    gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+    gather(key = "model",value = "cor", -c(class1,distance)) %>%
     mutate(model = factor(model,
                                                 levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
                                                                      "eeMETRIC","DisALEXI","SIMS"))
                  ) %>%
-    ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+    ggplot(aes(distance,cor,color = model, shape=model)) +
     geom_line() + 
     geom_point() +
     theme_bw() +
     labs(
-        y = "Normalized MAE (%)", 
+        y = "Pearson correlation", 
         x = "Temporal distance from satellite (days)"
     ) +
     facet_wrap(~class1, scales = "free_y")
@@ -373,17 +332,17 @@ result %>%
     filter(class1 == "Croplands") %>%
     select(!n) %>%
     select(!ETm) %>%
-    gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+    gather(key = "model",value = "cor", -c(class1,distance)) %>%
     mutate(model = factor(model,
                                                 levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
                                                                      "eeMETRIC","DisALEXI","SIMS"))
                  ) %>%
-    ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+    ggplot(aes(distance,cor,color = model, shape=model)) +
     geom_line() + 
     geom_point() +
     theme_bw() +
     labs(
-        y = "Normalized MAE (%)", 
+        y = "Pearson correlation", 
         x = "Temporal distance from satellite (days)"
     )
 ```
@@ -490,6 +449,98 @@ result %>%
 
 ![](2_analysis_files/figure-gfm/unnamed-chunk-6-2.png)<!-- -->
 
+## Normalized MAE
+
+``` r
+for(i in c(0:32)){
+
+    rmse_df <- df %>%
+        ungroup() %>%
+        group_by(class1) %>%
+        filter(nearest_distance == i & ET_OBS == T & !is.na(GF_geeSEBAL)) %>%
+        summarise(ETm = mean(ET_corr,na.rm=T),
+                            
+                            geeSEBAL = mae(ET_corr,GF_geeSEBAL)/ETm,
+                            PT.JPL = mae(ET_corr,GF_PT.JPL)/ETm,
+                            SSEBop = mae(ET_corr,GF_SSEBop)/ETm,
+                            eeMETRIC = mae(ET_corr,GF_eeMETRIC)/ETm,
+                            DisALEXI = mae(ET_corr,GF_DisALEXI)/ETm,
+                            SIMS = mae(ET_corr,GF_SIMS)/ETm,
+                            Ensemble = mae(ET_corr,GF_Ensemble)/ETm,
+                            
+                            distance = i,
+                            n = n()
+        ) 
+    
+    if(i == 0){
+        result <- rmse_df
+    } else{
+        result <- rbind(result,rmse_df)
+    }
+}
+
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+    mutate(model = factor(model,
+                                                levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+                                                                     "eeMETRIC","DisALEXI","SIMS"))
+                 ) %>%
+    ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+    geom_line() + 
+    geom_point() +
+    theme_bw() +
+    labs(
+        y = "Normalized MAE (%)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1, scales = "free_y")
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 7 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+    ## Warning: Removed 165 rows containing missing values or values outside the scale range
+    ## (`geom_line()`).
+
+    ## Warning: Removed 198 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
+
+![](2_analysis_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+
+``` r
+result %>%
+    filter(class1 == "Croplands") %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+    mutate(model = factor(model,
+                                                levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+                                                                     "eeMETRIC","DisALEXI","SIMS"))
+                 ) %>%
+    ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+    geom_line() + 
+    geom_point() +
+    theme_bw() +
+    labs(
+        y = "Normalized MAE (%)", 
+        x = "Temporal distance from satellite (days)"
+    )
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 7 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+    ## Warning: Removed 33 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
+
+![](2_analysis_files/figure-gfm/unnamed-chunk-7-2.png)<!-- -->
+
 ## Normalized MBE
 
 ``` r
@@ -552,7 +603,7 @@ result %>%
     ## Warning: Removed 198 rows containing missing values or values outside the scale range
     ## (`geom_point()`).
 
-![](2_analysis_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+![](2_analysis_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
 
 ``` r
 result %>%
@@ -570,98 +621,6 @@ result %>%
     theme_bw() +
     labs(
         y = "Normalized MBE (%)", 
-        x = "Temporal distance from satellite (days)"
-    )
-```
-
-    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
-    ## than 6 becomes difficult to discriminate
-    ## ℹ you have requested 7 values. Consider specifying shapes manually if you need
-    ##   that many have them.
-
-    ## Warning: Removed 33 rows containing missing values or values outside the scale range
-    ## (`geom_point()`).
-
-![](2_analysis_files/figure-gfm/unnamed-chunk-7-2.png)<!-- -->
-
-## correlation
-
-``` r
-for(i in c(0:32)){
-
-    rmse_df <- df %>%
-        ungroup() %>%
-        group_by(class1) %>%
-        filter(nearest_distance == i & ET_OBS == T & !is.na(GF_geeSEBAL)) %>%
-        summarise(ETm = mean(ET_corr,na.rm=T),
-                            
-                            geeSEBAL = cor(ET_corr,GF_geeSEBAL),
-                            PT.JPL = cor(ET_corr,GF_PT.JPL),
-                            SSEBop = cor(ET_corr,GF_SSEBop),
-                            eeMETRIC = cor(ET_corr,GF_eeMETRIC),
-                            DisALEXI = cor(ET_corr,GF_DisALEXI),
-                            SIMS = cor(ET_corr,GF_SIMS),
-                            Ensemble = cor(ET_corr,GF_Ensemble),
-                            
-                            distance = i,
-                            n = n()
-        ) 
-    
-    if(i == 0){
-        result <- rmse_df
-    } else{
-        result <- rbind(result,rmse_df)
-    }
-}
-
-result %>%
-    select(!n) %>%
-    select(!ETm) %>%
-    gather(key = "model",value = "cor", -c(class1,distance)) %>%
-    mutate(model = factor(model,
-                                                levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
-                                                                     "eeMETRIC","DisALEXI","SIMS"))
-                 ) %>%
-    ggplot(aes(distance,cor,color = model, shape=model)) +
-    geom_line() + 
-    geom_point() +
-    theme_bw() +
-    labs(
-        y = "Pearson correlation", 
-        x = "Temporal distance from satellite (days)"
-    ) +
-    facet_wrap(~class1, scales = "free_y")
-```
-
-    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
-    ## than 6 becomes difficult to discriminate
-    ## ℹ you have requested 7 values. Consider specifying shapes manually if you need
-    ##   that many have them.
-
-    ## Warning: Removed 165 rows containing missing values or values outside the scale range
-    ## (`geom_line()`).
-
-    ## Warning: Removed 198 rows containing missing values or values outside the scale range
-    ## (`geom_point()`).
-
-![](2_analysis_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
-
-``` r
-result %>%
-    filter(class1 == "Croplands") %>%
-    select(!n) %>%
-    select(!ETm) %>%
-    gather(key = "model",value = "cor", -c(class1,distance)) %>%
-    mutate(model = factor(model,
-                                                levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
-                                                                     "eeMETRIC","DisALEXI","SIMS"))
-                 ) %>%
-    ggplot(aes(distance,cor,color = model, shape=model)) +
-    geom_line() + 
-    geom_point() +
-    theme_bw() +
-    labs(
-        y = "Pearson correlation", 
         x = "Temporal distance from satellite (days)"
     )
 ```

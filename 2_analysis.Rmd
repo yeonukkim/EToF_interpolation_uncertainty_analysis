@@ -54,7 +54,7 @@ meta_use <- meta %>%
 	mutate(is_crop = ifelse(class1 == "Croplands",TRUE,FALSE),
 				 class1 = factor(class1,
 				 								levels = c("Croplands","Mixed Forests","Evergreen Forests",
-				 													 "Shrublands","Grasslands","Wetland/Riparina",""))
+				 													 "Shrublands","Grasslands","Wetland/Riparian",""))
 				 )
 
 df <- df %>% left_join(meta_use)
@@ -189,6 +189,125 @@ df <- df %>%
 				 GF_SIMS = interpolated_EToF_SIMS * gridMET_ETo_corr,
 				 GF_Ensemble = interpolated_EToF_Ensemble * gridMET_ETo_corr,
 				 )
+
+```
+
+## number of data
+```{r}
+
+for(i in c(0:32)){
+
+	rmse_df <- df %>%
+		ungroup() %>%
+		group_by(class1) %>%
+		filter(nearest_distance == i & ET_OBS == T & !is.na(GF_geeSEBAL)) %>%
+		summarise(ETm = mean(ET_corr,na.rm=T),
+							distance = i,
+							n = n()
+		) 
+	
+	if(i == 0){
+		result <- rmse_df
+	} else{
+		result <- rbind(result,rmse_df)
+	}
+}
+
+result %>%
+	ggplot(aes(distance,n)) +
+	geom_line() + 
+	geom_point() +
+	theme_bw() +
+	labs(
+		y = "number of data", 
+		x = "Temporal distance from satellite (days)"
+	) +
+	scale_y_log10()+
+	facet_wrap(~class1, scales = "free_y")
+
+
+result %>%
+	ggplot(aes(distance, ETm)) +
+	geom_line() + 
+	geom_point() +
+	theme_bw() +
+	labs(
+		y = "mean ET (mm/day)", 
+		x = "Temporal distance from satellite (days)"
+	) +
+	facet_wrap(~class1, scales = "free_y")
+
+
+
+
+```
+
+## correlation
+```{r}
+
+for(i in c(0:32)){
+
+	rmse_df <- df %>%
+		ungroup() %>%
+		group_by(class1) %>%
+		filter(nearest_distance == i & ET_OBS == T & !is.na(GF_geeSEBAL)) %>%
+		summarise(ETm = mean(ET_corr,na.rm=T),
+							
+							geeSEBAL = cor(ET_corr,GF_geeSEBAL),
+							PT.JPL = cor(ET_corr,GF_PT.JPL),
+							SSEBop = cor(ET_corr,GF_SSEBop),
+							eeMETRIC = cor(ET_corr,GF_eeMETRIC),
+							DisALEXI = cor(ET_corr,GF_DisALEXI),
+							SIMS = cor(ET_corr,GF_SIMS),
+							Ensemble = cor(ET_corr,GF_Ensemble),
+							
+							distance = i,
+							n = n()
+		) 
+	
+	if(i == 0){
+		result <- rmse_df
+	} else{
+		result <- rbind(result,rmse_df)
+	}
+}
+
+result %>%
+	select(!n) %>%
+	select(!ETm) %>%
+	gather(key = "model",value = "cor", -c(class1,distance)) %>%
+	mutate(model = factor(model,
+												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+																	 "eeMETRIC","DisALEXI","SIMS"))
+				 ) %>%
+	ggplot(aes(distance,cor,color = model, shape=model)) +
+	geom_line() + 
+	geom_point() +
+	theme_bw() +
+	labs(
+		y = "Pearson correlation", 
+		x = "Temporal distance from satellite (days)"
+	) +
+	facet_wrap(~class1, scales = "free_y")
+
+
+result %>%
+	filter(class1 == "Croplands") %>%
+	select(!n) %>%
+	select(!ETm) %>%
+	gather(key = "model",value = "cor", -c(class1,distance)) %>%
+	mutate(model = factor(model,
+												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+																	 "eeMETRIC","DisALEXI","SIMS"))
+				 ) %>%
+	ggplot(aes(distance,cor,color = model, shape=model)) +
+	geom_line() + 
+	geom_point() +
+	theme_bw() +
+	labs(
+		y = "Pearson correlation", 
+		x = "Temporal distance from satellite (days)"
+	)
 
 ```
 
@@ -331,76 +450,6 @@ result %>%
 ```
 
 
-
-## Normalized RMSE
-```{r}
-
-for(i in c(0:32)){
-
-	rmse_df <- df %>%
-		ungroup() %>%
-		group_by(class1) %>%
-		filter(nearest_distance == i & ET_OBS == T & !is.na(GF_geeSEBAL)) %>%
-		summarise(ETm = mean(ET_corr,na.rm=T),
-							
-							geeSEBAL = rmse(ET_corr,GF_geeSEBAL)/ETm,
-							PT.JPL = rmse(ET_corr,GF_PT.JPL)/ETm,
-							SSEBop = rmse(ET_corr,GF_SSEBop)/ETm,
-							eeMETRIC = rmse(ET_corr,GF_eeMETRIC)/ETm,
-							DisALEXI = rmse(ET_corr,GF_DisALEXI)/ETm,
-							SIMS = rmse(ET_corr,GF_SIMS)/ETm,
-							Ensemble = rmse(ET_corr,GF_Ensemble)/ETm,
-							
-							distance = i,
-							n = n()
-		) 
-	
-	if(i == 0){
-		result <- rmse_df
-	} else{
-		result <- rbind(result,rmse_df)
-	}
-}
-
-result %>%
-	select(!n) %>%
-	select(!ETm) %>%
-	gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
-	mutate(model = factor(model,
-												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
-																	 "eeMETRIC","DisALEXI","SIMS"))
-				 ) %>%
-	ggplot(aes(distance,nRMSE*100,color = model, shape=model)) +
-	geom_line() + 
-	geom_point() +
-	theme_bw() +
-	labs(
-		y = "Normalized RMSE (%)", 
-		x = "Temporal distance from satellite (days)"
-	) +
-	facet_wrap(~class1, scales = "free_y")
-
-
-result %>%
-	filter(class1 == "Croplands") %>%
-	select(!n) %>%
-	select(!ETm) %>%
-	gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
-	mutate(model = factor(model,
-												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
-																	 "eeMETRIC","DisALEXI","SIMS"))
-				 ) %>%
-	ggplot(aes(distance,nRMSE*100,color = model, shape=model)) +
-	geom_line() + 
-	geom_point() +
-	theme_bw() +
-	labs(
-		y = "Normalized RMSE (%)", 
-		x = "Temporal distance from satellite (days)"
-	)
-
-```
-
 ## Normalized MBE
 ```{r}
 mbe <- function (actual, predicted) {return(mean(predicted - actual,na.rm=T))}
@@ -471,72 +520,3 @@ result %>%
 
 ```
 
-
-## correlation
-```{r}
-
-for(i in c(0:32)){
-
-	rmse_df <- df %>%
-		ungroup() %>%
-		group_by(class1) %>%
-		filter(nearest_distance == i & ET_OBS == T & !is.na(GF_geeSEBAL)) %>%
-		summarise(ETm = mean(ET_corr,na.rm=T),
-							
-							geeSEBAL = cor(ET_corr,GF_geeSEBAL),
-							PT.JPL = cor(ET_corr,GF_PT.JPL),
-							SSEBop = cor(ET_corr,GF_SSEBop),
-							eeMETRIC = cor(ET_corr,GF_eeMETRIC),
-							DisALEXI = cor(ET_corr,GF_DisALEXI),
-							SIMS = cor(ET_corr,GF_SIMS),
-							Ensemble = cor(ET_corr,GF_Ensemble),
-							
-							distance = i,
-							n = n()
-		) 
-	
-	if(i == 0){
-		result <- rmse_df
-	} else{
-		result <- rbind(result,rmse_df)
-	}
-}
-
-result %>%
-	select(!n) %>%
-	select(!ETm) %>%
-	gather(key = "model",value = "cor", -c(class1,distance)) %>%
-	mutate(model = factor(model,
-												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
-																	 "eeMETRIC","DisALEXI","SIMS"))
-				 ) %>%
-	ggplot(aes(distance,cor,color = model, shape=model)) +
-	geom_line() + 
-	geom_point() +
-	theme_bw() +
-	labs(
-		y = "Pearson correlation", 
-		x = "Temporal distance from satellite (days)"
-	) +
-	facet_wrap(~class1, scales = "free_y")
-
-
-result %>%
-	filter(class1 == "Croplands") %>%
-	select(!n) %>%
-	select(!ETm) %>%
-	gather(key = "model",value = "cor", -c(class1,distance)) %>%
-	mutate(model = factor(model,
-												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
-																	 "eeMETRIC","DisALEXI","SIMS"))
-				 ) %>%
-	ggplot(aes(distance,cor,color = model, shape=model)) +
-	geom_line() + 
-	geom_point() +
-	theme_bw() +
-	labs(
-		y = "Pearson correlation", 
-		x = "Temporal distance from satellite (days)"
-	)
-
-```
