@@ -106,6 +106,16 @@ df_mon %>% ggplot(aes(d_cut)) + geom_bar()
 
 ```
 
+#### Note:
+A mean temporal distance of 2 corresponds to a satellite revisit interval of 8 days. 
+
+This is because: (0 + 1 + 2 + 3 + 4 + 3 + 2 + 1) / 8 = 2.
+
+- Mean temporal distance = 2 → Revisit interval = 8 days
+- Mean temporal distance = 4 → Revisit interval = 16 days
+- Mean temporal distance = 6 → Revisit interval = 24 days
+- Mean temporal distance = 9 → Revisit interval = 36 days
+
 ## correlation
 ```{r}
 
