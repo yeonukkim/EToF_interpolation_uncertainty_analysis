@@ -265,6 +265,21 @@ result %>%
 
 ![](2_analysis_files/figure-gfm/unnamed-chunk-4-2.png)<!-- -->
 
+``` r
+result %>%
+    ggplot(aes(distance, ETm)) +
+    geom_line() + 
+    geom_point() +
+    theme_bw() +
+    labs(
+        y = "mean ET (mm/day)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1)
+```
+
+![](2_analysis_files/figure-gfm/unnamed-chunk-4-3.png)<!-- -->
+
 ## correlation
 
 ``` r
@@ -515,6 +530,132 @@ result %>%
 
 ![](2_analysis_files/figure-gfm/unnamed-chunk-6-3.png)<!-- -->
 
+## z-score RMSE
+
+``` r
+for(i in c(0:32)){
+
+    rmse_df <- df %>%
+        ungroup() %>%
+        group_by(class1) %>%
+        filter(nearest_distance == i & ET_OBS == T & !is.na(GF_geeSEBAL)) %>%
+        summarise(#ETm = mean(ET_corr,na.rm=T),
+                            ETm = sd(ET_corr,na.rm=T),
+                            
+                            geeSEBAL = rmse(ET_corr,GF_geeSEBAL)/ETm,
+                            PT.JPL = rmse(ET_corr,GF_PT.JPL)/ETm,
+                            SSEBop = rmse(ET_corr,GF_SSEBop)/ETm,
+                            eeMETRIC = rmse(ET_corr,GF_eeMETRIC)/ETm,
+                            DisALEXI = rmse(ET_corr,GF_DisALEXI)/ETm,
+                            SIMS = rmse(ET_corr,GF_SIMS)/ETm,
+                            Ensemble = rmse(ET_corr,GF_Ensemble)/ETm,
+                            
+                            distance = i,
+                            n = n()
+        ) 
+    
+    if(i == 0){
+        result <- rmse_df
+    } else{
+        result <- rbind(result,rmse_df)
+    }
+}
+
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
+    mutate(model = factor(model,
+                                                levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+                                                                     "eeMETRIC","DisALEXI","SIMS"))
+                 ) %>%
+    ggplot(aes(distance,nRMSE*100,color = model, shape=model)) +
+    geom_line() + 
+    geom_point() +
+    theme_bw() +
+    labs(
+        y = "Normalized RMSE (%)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1, scales = "free_y")
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 7 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+    ## Warning: Removed 165 rows containing missing values or values outside the scale range
+    ## (`geom_line()`).
+
+    ## Warning: Removed 198 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
+
+![](2_analysis_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+
+``` r
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
+    mutate(model = factor(model,
+                                                levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+                                                                     "eeMETRIC","DisALEXI","SIMS"))
+                 ) %>%
+    ggplot(aes(distance,nRMSE*100,color = model, shape=model)) +
+    geom_line() + 
+    geom_point() +
+    theme_bw() +
+    labs(
+        y = "Normalized RMSE (%)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1)
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 7 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+    ## Warning: Removed 165 rows containing missing values or values outside the scale range
+    ## (`geom_line()`).
+
+    ## Warning: Removed 198 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
+
+![](2_analysis_files/figure-gfm/unnamed-chunk-7-2.png)<!-- -->
+
+``` r
+result %>%
+    filter(class1 == "Croplands") %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
+    mutate(model = factor(model,
+                                                levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+                                                                     "eeMETRIC","DisALEXI","SIMS"))
+                 ) %>%
+    ggplot(aes(distance,nRMSE*100,color = model, shape=model)) +
+    geom_line() + 
+    geom_point() +
+    theme_bw() +
+    labs(title = "crop",
+        y = "Normalized RMSE (%)", 
+        x = "Temporal distance from satellite (days)"
+    )
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 7 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+    ## Warning: Removed 33 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
+
+![](2_analysis_files/figure-gfm/unnamed-chunk-7-3.png)<!-- -->
+
 ## Normalized MAE
 
 ``` r
@@ -575,7 +716,7 @@ result %>%
     ## Warning: Removed 198 rows containing missing values or values outside the scale range
     ## (`geom_point()`).
 
-![](2_analysis_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+![](2_analysis_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
 
 ``` r
 result %>%
@@ -608,7 +749,7 @@ result %>%
     ## Warning: Removed 198 rows containing missing values or values outside the scale range
     ## (`geom_point()`).
 
-![](2_analysis_files/figure-gfm/unnamed-chunk-7-2.png)<!-- -->
+![](2_analysis_files/figure-gfm/unnamed-chunk-8-2.png)<!-- -->
 
 ``` r
 result %>%
@@ -638,7 +779,132 @@ result %>%
     ## Warning: Removed 33 rows containing missing values or values outside the scale range
     ## (`geom_point()`).
 
-![](2_analysis_files/figure-gfm/unnamed-chunk-7-3.png)<!-- -->
+![](2_analysis_files/figure-gfm/unnamed-chunk-8-3.png)<!-- -->
+
+## Normalized MAE by MAD
+
+``` r
+for(i in c(0:32)){
+
+    rmse_df <- df %>%
+        ungroup() %>%
+        group_by(class1) %>%
+        filter(nearest_distance == i & ET_OBS == T & !is.na(GF_geeSEBAL)) %>%
+        summarise(#ETm = mean(ET_corr,na.rm=T),
+                            ETm = mad(ET_corr,na.rm=T),
+                            geeSEBAL = mae(ET_corr,GF_geeSEBAL)/ETm,
+                            PT.JPL = mae(ET_corr,GF_PT.JPL)/ETm,
+                            SSEBop = mae(ET_corr,GF_SSEBop)/ETm,
+                            eeMETRIC = mae(ET_corr,GF_eeMETRIC)/ETm,
+                            DisALEXI = mae(ET_corr,GF_DisALEXI)/ETm,
+                            SIMS = mae(ET_corr,GF_SIMS)/ETm,
+                            Ensemble = mae(ET_corr,GF_Ensemble)/ETm,
+                            
+                            distance = i,
+                            n = n()
+        ) 
+    
+    if(i == 0){
+        result <- rmse_df
+    } else{
+        result <- rbind(result,rmse_df)
+    }
+}
+
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+    mutate(model = factor(model,
+                                                levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+                                                                     "eeMETRIC","DisALEXI","SIMS"))
+                 ) %>%
+    ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+    geom_line() + 
+    geom_point() +
+    theme_bw() +
+    labs(
+        y = "Normalized MAE (%)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1, scales = "free_y")
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 7 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+    ## Warning: Removed 165 rows containing missing values or values outside the scale range
+    ## (`geom_line()`).
+
+    ## Warning: Removed 198 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
+
+![](2_analysis_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+
+``` r
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+    mutate(model = factor(model,
+                                                levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+                                                                     "eeMETRIC","DisALEXI","SIMS"))
+                 ) %>%
+    ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+    geom_line() + 
+    geom_point() +
+    theme_bw() +
+    labs(
+        y = "Normalized MAE (%)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1)
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 7 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+    ## Warning: Removed 165 rows containing missing values or values outside the scale range
+    ## (`geom_line()`).
+
+    ## Warning: Removed 198 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
+
+![](2_analysis_files/figure-gfm/unnamed-chunk-9-2.png)<!-- -->
+
+``` r
+result %>%
+    filter(class1 == "Croplands") %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+    mutate(model = factor(model,
+                                                levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+                                                                     "eeMETRIC","DisALEXI","SIMS"))
+                 ) %>%
+    ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+    geom_line() + 
+    geom_point() +
+    theme_bw() +
+    labs(title = "crop",
+        y = "Normalized MAE (%)", 
+        x = "Temporal distance from satellite (days)"
+    )
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 7 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+    ## Warning: Removed 33 rows containing missing values or values outside the scale range
+    ## (`geom_point()`).
+
+![](2_analysis_files/figure-gfm/unnamed-chunk-9-3.png)<!-- -->
 
 ## Normalized MBE
 
@@ -702,7 +968,7 @@ result %>%
     ## Warning: Removed 198 rows containing missing values or values outside the scale range
     ## (`geom_point()`).
 
-![](2_analysis_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+![](2_analysis_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
 
 ``` r
 result %>%
@@ -735,7 +1001,7 @@ result %>%
     ## Warning: Removed 198 rows containing missing values or values outside the scale range
     ## (`geom_point()`).
 
-![](2_analysis_files/figure-gfm/unnamed-chunk-8-2.png)<!-- -->
+![](2_analysis_files/figure-gfm/unnamed-chunk-10-2.png)<!-- -->
 
 ``` r
 result %>%
@@ -765,4 +1031,4 @@ result %>%
     ## Warning: Removed 33 rows containing missing values or values outside the scale range
     ## (`geom_point()`).
 
-![](2_analysis_files/figure-gfm/unnamed-chunk-8-3.png)<!-- -->
+![](2_analysis_files/figure-gfm/unnamed-chunk-10-3.png)<!-- -->

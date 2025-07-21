@@ -237,6 +237,16 @@ result %>%
 	) +
 	facet_wrap(~class1, scales = "free_y")
 
+result %>%
+	ggplot(aes(distance, ETm)) +
+	geom_line() + 
+	geom_point() +
+	theme_bw() +
+	labs(
+		y = "mean ET (mm/day)", 
+		x = "Temporal distance from satellite (days)"
+	) +
+	facet_wrap(~class1)
 
 
 
@@ -329,6 +339,9 @@ result %>%
 
 ```
 
+
+
+
 ## Normalized RMSE
 ```{r}
 
@@ -339,6 +352,95 @@ for(i in c(0:32)){
 		group_by(class1) %>%
 		filter(nearest_distance == i & ET_OBS == T & !is.na(GF_geeSEBAL)) %>%
 		summarise(ETm = mean(ET_corr,na.rm=T),
+							
+							geeSEBAL = rmse(ET_corr,GF_geeSEBAL)/ETm,
+							PT.JPL = rmse(ET_corr,GF_PT.JPL)/ETm,
+							SSEBop = rmse(ET_corr,GF_SSEBop)/ETm,
+							eeMETRIC = rmse(ET_corr,GF_eeMETRIC)/ETm,
+							DisALEXI = rmse(ET_corr,GF_DisALEXI)/ETm,
+							SIMS = rmse(ET_corr,GF_SIMS)/ETm,
+							Ensemble = rmse(ET_corr,GF_Ensemble)/ETm,
+							
+							distance = i,
+							n = n()
+		) 
+	
+	if(i == 0){
+		result <- rmse_df
+	} else{
+		result <- rbind(result,rmse_df)
+	}
+}
+
+result %>%
+	select(!n) %>%
+	select(!ETm) %>%
+	gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
+	mutate(model = factor(model,
+												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+																	 "eeMETRIC","DisALEXI","SIMS"))
+				 ) %>%
+	ggplot(aes(distance,nRMSE*100,color = model, shape=model)) +
+	geom_line() + 
+	geom_point() +
+	theme_bw() +
+	labs(
+		y = "Normalized RMSE (%)", 
+		x = "Temporal distance from satellite (days)"
+	) +
+	facet_wrap(~class1, scales = "free_y")
+
+
+result %>%
+	select(!n) %>%
+	select(!ETm) %>%
+	gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
+	mutate(model = factor(model,
+												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+																	 "eeMETRIC","DisALEXI","SIMS"))
+				 ) %>%
+	ggplot(aes(distance,nRMSE*100,color = model, shape=model)) +
+	geom_line() + 
+	geom_point() +
+	theme_bw() +
+	labs(
+		y = "Normalized RMSE (%)", 
+		x = "Temporal distance from satellite (days)"
+	) +
+	facet_wrap(~class1)
+
+result %>%
+	filter(class1 == "Croplands") %>%
+	select(!n) %>%
+	select(!ETm) %>%
+	gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
+	mutate(model = factor(model,
+												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+																	 "eeMETRIC","DisALEXI","SIMS"))
+				 ) %>%
+	ggplot(aes(distance,nRMSE*100,color = model, shape=model)) +
+	geom_line() + 
+	geom_point() +
+	theme_bw() +
+	labs(title = "crop",
+		y = "Normalized RMSE (%)", 
+		x = "Temporal distance from satellite (days)"
+	)
+
+```
+
+
+## z-score RMSE
+```{r}
+
+for(i in c(0:32)){
+
+	rmse_df <- df %>%
+		ungroup() %>%
+		group_by(class1) %>%
+		filter(nearest_distance == i & ET_OBS == T & !is.na(GF_geeSEBAL)) %>%
+		summarise(#ETm = mean(ET_corr,na.rm=T),
+							ETm = sd(ET_corr,na.rm=T),
 							
 							geeSEBAL = rmse(ET_corr,GF_geeSEBAL)/ETm,
 							PT.JPL = rmse(ET_corr,GF_PT.JPL)/ETm,
@@ -427,6 +529,95 @@ for(i in c(0:32)){
 		filter(nearest_distance == i & ET_OBS == T & !is.na(GF_geeSEBAL)) %>%
 		summarise(ETm = mean(ET_corr,na.rm=T),
 							
+							geeSEBAL = mae(ET_corr,GF_geeSEBAL)/ETm,
+							PT.JPL = mae(ET_corr,GF_PT.JPL)/ETm,
+							SSEBop = mae(ET_corr,GF_SSEBop)/ETm,
+							eeMETRIC = mae(ET_corr,GF_eeMETRIC)/ETm,
+							DisALEXI = mae(ET_corr,GF_DisALEXI)/ETm,
+							SIMS = mae(ET_corr,GF_SIMS)/ETm,
+							Ensemble = mae(ET_corr,GF_Ensemble)/ETm,
+							
+							distance = i,
+							n = n()
+		) 
+	
+	if(i == 0){
+		result <- rmse_df
+	} else{
+		result <- rbind(result,rmse_df)
+	}
+}
+
+result %>%
+	select(!n) %>%
+	select(!ETm) %>%
+	gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+	mutate(model = factor(model,
+												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+																	 "eeMETRIC","DisALEXI","SIMS"))
+				 ) %>%
+	ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+	geom_line() + 
+	geom_point() +
+	theme_bw() +
+	labs(
+		y = "Normalized MAE (%)", 
+		x = "Temporal distance from satellite (days)"
+	) +
+	facet_wrap(~class1, scales = "free_y")
+
+
+result %>%
+	select(!n) %>%
+	select(!ETm) %>%
+	gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+	mutate(model = factor(model,
+												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+																	 "eeMETRIC","DisALEXI","SIMS"))
+				 ) %>%
+	ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+	geom_line() + 
+	geom_point() +
+	theme_bw() +
+	labs(
+		y = "Normalized MAE (%)", 
+		x = "Temporal distance from satellite (days)"
+	) +
+	facet_wrap(~class1)
+
+
+result %>%
+	filter(class1 == "Croplands") %>%
+	select(!n) %>%
+	select(!ETm) %>%
+	gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+	mutate(model = factor(model,
+												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+																	 "eeMETRIC","DisALEXI","SIMS"))
+				 ) %>%
+	ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+	geom_line() + 
+	geom_point() +
+	theme_bw() +
+	labs(title = "crop",
+		y = "Normalized MAE (%)", 
+		x = "Temporal distance from satellite (days)"
+	)
+
+```
+
+
+## Normalized MAE by MAD
+```{r}
+
+for(i in c(0:32)){
+
+	rmse_df <- df %>%
+		ungroup() %>%
+		group_by(class1) %>%
+		filter(nearest_distance == i & ET_OBS == T & !is.na(GF_geeSEBAL)) %>%
+		summarise(#ETm = mean(ET_corr,na.rm=T),
+							ETm = mad(ET_corr,na.rm=T),
 							geeSEBAL = mae(ET_corr,GF_geeSEBAL)/ETm,
 							PT.JPL = mae(ET_corr,GF_PT.JPL)/ETm,
 							SSEBop = mae(ET_corr,GF_SSEBop)/ETm,
