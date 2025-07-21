@@ -292,7 +292,6 @@ result %>%
 
 
 result %>%
-	filter(class1 == "Croplands") %>%
 	select(!n) %>%
 	select(!ETm) %>%
 	gather(key = "model",value = "cor", -c(class1,distance)) %>%
@@ -305,6 +304,25 @@ result %>%
 	geom_point() +
 	theme_bw() +
 	labs(
+		y = "Pearson correlation", 
+		x = "Temporal distance from satellite (days)"
+	) +
+	facet_wrap(~class1)
+
+result %>%
+	filter(class1 == "Croplands") %>%
+	select(!n) %>%
+	select(!ETm) %>%
+	gather(key = "model",value = "cor", -c(class1,distance)) %>%
+	mutate(model = factor(model,
+												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+																	 "eeMETRIC","DisALEXI","SIMS"))
+				 ) %>%
+	ggplot(aes(distance,cor,color = model, shape=model)) +
+	geom_line() + 
+	geom_point() +
+	theme_bw() +
+	labs(title = "crop",
 		y = "Pearson correlation", 
 		x = "Temporal distance from satellite (days)"
 	)
@@ -361,7 +379,6 @@ result %>%
 
 
 result %>%
-	filter(class1 == "Croplands") %>%
 	select(!n) %>%
 	select(!ETm) %>%
 	gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
@@ -374,6 +391,25 @@ result %>%
 	geom_point() +
 	theme_bw() +
 	labs(
+		y = "Normalized RMSE (%)", 
+		x = "Temporal distance from satellite (days)"
+	) +
+	facet_wrap(~class1)
+
+result %>%
+	filter(class1 == "Croplands") %>%
+	select(!n) %>%
+	select(!ETm) %>%
+	gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
+	mutate(model = factor(model,
+												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+																	 "eeMETRIC","DisALEXI","SIMS"))
+				 ) %>%
+	ggplot(aes(distance,nRMSE*100,color = model, shape=model)) +
+	geom_line() + 
+	geom_point() +
+	theme_bw() +
+	labs(title = "crop",
 		y = "Normalized RMSE (%)", 
 		x = "Temporal distance from satellite (days)"
 	)
@@ -430,7 +466,6 @@ result %>%
 
 
 result %>%
-	filter(class1 == "Croplands") %>%
 	select(!n) %>%
 	select(!ETm) %>%
 	gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
@@ -443,6 +478,26 @@ result %>%
 	geom_point() +
 	theme_bw() +
 	labs(
+		y = "Normalized MAE (%)", 
+		x = "Temporal distance from satellite (days)"
+	) +
+	facet_wrap(~class1)
+
+
+result %>%
+	filter(class1 == "Croplands") %>%
+	select(!n) %>%
+	select(!ETm) %>%
+	gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+	mutate(model = factor(model,
+												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+																	 "eeMETRIC","DisALEXI","SIMS"))
+				 ) %>%
+	ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+	geom_line() + 
+	geom_point() +
+	theme_bw() +
+	labs(title = "crop",
 		y = "Normalized MAE (%)", 
 		x = "Temporal distance from satellite (days)"
 	)
@@ -501,7 +556,6 @@ result %>%
 
 
 result %>%
-	filter(class1 == "Croplands") %>%
 	select(!n) %>%
 	select(!ETm) %>%
 	gather(key = "model",value = "nMBE", -c(class1,distance)) %>%
@@ -514,6 +568,26 @@ result %>%
 	geom_point() +
 	theme_bw() +
 	labs(
+		y = "Normalized MBE (%)", 
+		x = "Temporal distance from satellite (days)"
+	) +
+	facet_wrap(~class1)
+
+
+result %>%
+	filter(class1 == "Croplands") %>%
+	select(!n) %>%
+	select(!ETm) %>%
+	gather(key = "model",value = "nMBE", -c(class1,distance)) %>%
+	mutate(model = factor(model,
+												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+																	 "eeMETRIC","DisALEXI","SIMS"))
+				 ) %>%
+	ggplot(aes(distance,nMBE*100,color = model, shape=model)) +
+	geom_line() + 
+	geom_point() +
+	theme_bw() +
+	labs(title = "crop",
 		y = "Normalized MBE (%)", 
 		x = "Temporal distance from satellite (days)"
 	)

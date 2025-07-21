@@ -157,6 +157,25 @@ result %>%
 
 result %>%
 	select(!ETm) %>%
+	gather(key = "model",value = "cor", -c(class1,d_cut)) %>%
+	mutate(model = factor(model,
+												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+																	 "eeMETRIC","DisALEXI","SIMS"))
+				 ) %>%
+	ggplot(aes(as.numeric(d_cut),cor,color = model, shape=model)) +
+	scale_x_continuous(breaks = c(1,2,3,4,5),
+                     labels = levels(result$d_cut)) +
+	geom_line() +
+	geom_point() +
+	theme_bw() +
+	labs(
+		y = "Pearson correlation", 
+		x = "Mean temporal distance from satellite (days)"
+	) +
+	facet_wrap(~class1)
+
+result %>%
+	select(!ETm) %>%
 	filter(class1 == "Croplands") %>%
 	gather(key = "model",value = "cor", -c(class1,d_cut)) %>%
 	mutate(model = factor(model,
@@ -169,7 +188,7 @@ result %>%
 	geom_line() + 
 	geom_point() +
 	theme_bw() +
-	labs(
+	labs(title = "crop",
 		y = "Pearson correlation", 
 		x = "Mean temporal distance from satellite (days)"
 	)
@@ -215,6 +234,25 @@ result %>%
 	) +
 	facet_wrap(~class1, scales = "free_y")
 
+
+result %>%
+	select(!ETm) %>%
+	gather(key = "model",value = "rmse", -c(class1,d_cut)) %>%
+	mutate(model = factor(model,
+												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+																	 "eeMETRIC","DisALEXI","SIMS"))
+				 ) %>%
+	ggplot(aes(as.numeric(d_cut),rmse*100,color = model, shape=model)) +
+	scale_x_continuous(breaks = c(1,2,3,4,5),
+                     labels = levels(result$d_cut)) +
+	geom_line() +
+	geom_point() +
+	theme_bw() +
+	labs(
+		y = "Normalized RMSE (%)",
+		x = "Mean temporal distance from satellite (days)"
+	) +
+	facet_wrap(~class1)
 
 result %>%
 	select(!ETm) %>%
@@ -275,6 +313,25 @@ result %>%
 		x = "Mean temporal distance from satellite (days)"
 	) +
 	facet_wrap(~class1, scales = "free_y")
+
+result %>%
+	select(!ETm) %>%
+	gather(key = "model",value = "mae", -c(class1,d_cut)) %>%
+	mutate(model = factor(model,
+												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+																	 "eeMETRIC","DisALEXI","SIMS"))
+				 ) %>%
+	ggplot(aes(as.numeric(d_cut),mae*100,color = model, shape=model)) +
+	scale_x_continuous(breaks = c(1,2,3,4,5),
+                     labels = levels(result$d_cut)) +
+	geom_line() +
+	geom_point() +
+	theme_bw() +
+	labs(
+		y = "Normalized MAE (%)",
+		x = "Mean temporal distance from satellite (days)"
+	) +
+	facet_wrap(~class1)
 
 
 result %>%
@@ -338,6 +395,25 @@ result %>%
 	) +
 	facet_wrap(~class1, scales = "free_y")
 
+
+result %>%
+	select(!ETm) %>%
+	gather(key = "model",value = "mbe", -c(class1,d_cut)) %>%
+	mutate(model = factor(model,
+												levels = c("Ensemble","geeSEBAL","PT.JPL","SSEBop",
+																	 "eeMETRIC","DisALEXI","SIMS"))
+				 ) %>%
+	ggplot(aes(as.numeric(d_cut),mbe*100,color = model, shape=model)) +
+	scale_x_continuous(breaks = c(1,2,3,4,5),
+                     labels = levels(result$d_cut)) +
+	geom_line() +
+	geom_point() +
+	theme_bw() +
+	labs(
+		y = "Normalized MBE (%)",
+		x = "Mean temporal distance from satellite (days)"
+	) +
+	facet_wrap(~class1)
 
 result %>%
 	select(!ETm) %>%
