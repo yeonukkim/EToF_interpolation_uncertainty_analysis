@@ -1,0 +1,866 @@
+interpolation uncertainty analysis using in-situ
+================
+Yeonuk Kim
+
+## Data preparation
+
+``` r
+rm(list = ls())
+
+library("tidyverse")
+```
+
+    ## ── Attaching core tidyverse packages ──────────────────────── tidyverse 2.0.0 ──
+    ## ✔ dplyr     1.1.4     ✔ readr     2.1.5
+    ## ✔ forcats   1.0.0     ✔ stringr   1.5.1
+    ## ✔ ggplot2   3.5.1     ✔ tibble    3.2.1
+    ## ✔ lubridate 1.9.4     ✔ tidyr     1.3.1
+    ## ✔ purrr     1.0.2     
+    ## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+    ## ✖ dplyr::filter() masks stats::filter()
+    ## ✖ dplyr::lag()    masks stats::lag()
+    ## ℹ Use the conflicted package (<http://conflicted.r-lib.org/>) to force all conflicts to become errors
+
+``` r
+library("lubridate")
+library(Metrics)
+
+# interpolation max days
+maxdays <- 32
+
+### daily EC, OpenET, gridMET ETo
+df <- read.csv("daily_data.csv")
+df <- df %>% 
+    mutate(DATE=as.Date(DATE),
+                 YEAR = year(DATE),
+                 MON = month(DATE)) 
+
+
+# filter data to OpenET data available period
+df <- df %>%
+    mutate(RS_OBS = ifelse(!is.na(eeMETRIC),T,F),
+                 RS_OBS_SIMS = ifelse(!is.na(SIMS),T,F),
+                 ET_OBS = ifelse(!is.na(ET_corr),T,F)
+    )
+
+vaild_date <- df %>%
+    filter(RS_OBS) %>%
+    group_by(site) %>%
+    summarise(start = min(DATE) - maxdays,
+                        end = max(DATE) + maxdays)
+
+
+df <- df %>% left_join(vaild_date)
+```
+
+    ## Joining with `by = join_by(site)`
+
+``` r
+df <- df %>% filter(DATE >= start & DATE <= end) %>%
+    select(!start) %>% select(!end)
+
+
+###
+meta <- read.csv("station_metadata.csv",skip = 1)
+colnames(meta)[1] <- "site"
+
+meta_use <- meta %>% 
+    select(site,General.classification,Land.cover.type) %>%
+    rename(site=site, 
+                 class1 = General.classification,
+                 class2 = Land.cover.type) %>%
+    mutate(is_crop = ifelse(class1 == "Croplands",TRUE,FALSE),
+                 class1 = factor(class1,
+                                                levels = c("Croplands","Mixed Forests","Evergreen Forests",
+                                                                     "Shrublands","Grasslands","Wetland/Riparian",""))
+                 )
+
+df <- df %>% left_join(meta_use)
+```
+
+    ## Joining with `by = join_by(site)`
+
+## Interpolation preparation
+
+``` r
+# nearest temporal distance
+df <- df %>%
+    group_by(site) %>%        
+    arrange(DATE) %>%   
+    mutate(nearest_distance = sapply(DATE, function(d) {
+        if (any(RS_OBS)) {
+            min(abs(as.numeric(difftime(DATE[RS_OBS], d, units = "days"))))
+        } else {
+            Inf  # No RS_OBS in the group at all
+        }
+    }))
+
+# grouping for interpolation (if gap is longer than 32, set as different group)
+cutting_long_gap <- function(x, maxgap){
+    # Find positions where x equals maxgap
+    pos <- which(x == maxgap+1)
+    
+    # Start with all observations in group 1
+    group <- rep(1, length(x))
+    
+    if(length(pos) >= 1){
+        # For the first occurrence, increment the group for observations after it
+        if(pos[1] < length(x)){
+            group[(pos[1] + 1):length(x)] <- group[(pos[1] + 1):length(x)] + 1
+        }
+        # For subsequent occurrences, increment the group starting from the occurrence itself
+        if(length(pos) >= 2){
+            for(i in 2:length(pos)){
+                group[pos[i]:length(x)] <- group[pos[i]:length(x)] + 1
+            }
+        }
+    }
+    return(group)
+}
+
+df <- df %>%
+    group_by(site) %>%
+    arrange(DATE) %>%
+    mutate(gap_group = cutting_long_gap(nearest_distance,maxdays)) %>%
+    ungroup()
+
+stat <- df %>%
+    filter(RS_OBS) %>%
+    group_by(class1)%>%
+    summarise(s = sd(ET_corr)
+                        )
+
+df <- df %>% left_join(stat)
+```
+
+    ## Joining with `by = join_by(class1)`
+
+``` r
+# add random error
+RS_mimic <-  df %>%
+    filter(RS_OBS) %>%
+    rowwise() %>%
+    mutate(ET00 = ET_corr,
+                 ET01 = ET_corr + rnorm(1,0,s*0.2),
+                 ET02 = ET_corr + rnorm(1,0,s*0.4),
+                 ET03 = ET_corr + rnorm(1,0,s*0.6),
+                 ET04 = ET_corr + rnorm(1,0,s*0.8),
+                 ET05 = ET_corr + rnorm(1,0,s*1.0),
+                 ET06 = ET_corr + rnorm(1,0,s*1.2),
+                 ET07 = ET_corr + rnorm(1,0,s*1.4),
+                 ET08 = ET_corr + rnorm(1,0,s*1.6),
+                 ET09 = ET_corr + rnorm(1,0,s*1.8),
+                 ET10 = ET_corr + rnorm(1,0,s*2),
+                 ) %>%
+    select(site,DATE, ET00,ET01,ET02,ET03,ET04,ET05,ET06,ET07,ET08,ET09,ET10)
+
+df <- df %>% left_join(RS_mimic)
+```
+
+    ## Joining with `by = join_by(site, DATE)`
+
+``` r
+# EToF
+df <- df %>%
+    mutate(EToF_ET00 = ET00/gridMET_ETo_corr,
+                 EToF_ET01 = ET01/gridMET_ETo_corr,
+                 EToF_ET02 = ET02/gridMET_ETo_corr,
+                 EToF_ET03 = ET03/gridMET_ETo_corr,
+                 EToF_ET04 = ET04/gridMET_ETo_corr,
+                 EToF_ET05 = ET05/gridMET_ETo_corr,
+                 EToF_ET06 = ET06/gridMET_ETo_corr,
+                 EToF_ET07 = ET07/gridMET_ETo_corr,
+                 EToF_ET08 = ET08/gridMET_ETo_corr,
+                 EToF_ET09 = ET09/gridMET_ETo_corr,
+                 EToF_ET10 = ET10/gridMET_ETo_corr,
+
+                 EToF_ET00 = ifelse(EToF_ET00 > 1.4, 1.4,ifelse(EToF_ET00 < 0, 0, EToF_ET00)),
+                 EToF_ET01 = ifelse(EToF_ET01 > 1.4, 1.4,ifelse(EToF_ET01 < 0, 0, EToF_ET01)),
+                 EToF_ET02 = ifelse(EToF_ET02 > 1.4, 1.4,ifelse(EToF_ET02 < 0, 0, EToF_ET02)),
+                 EToF_ET03 = ifelse(EToF_ET03 > 1.4, 1.4,ifelse(EToF_ET03 < 0, 0, EToF_ET03)),
+                 EToF_ET04 = ifelse(EToF_ET04 > 1.4, 1.4,ifelse(EToF_ET04 < 0, 0, EToF_ET04)),
+                 EToF_ET05 = ifelse(EToF_ET05 > 1.4, 1.4,ifelse(EToF_ET05 < 0, 0, EToF_ET05)),
+                 EToF_ET06 = ifelse(EToF_ET06 > 1.4, 1.4,ifelse(EToF_ET06 < 0, 0, EToF_ET06)),
+                 EToF_ET07 = ifelse(EToF_ET07 > 1.4, 1.4,ifelse(EToF_ET07 < 0, 0, EToF_ET07)),
+                 EToF_ET08 = ifelse(EToF_ET08 > 1.4, 1.4,ifelse(EToF_ET08 < 0, 0, EToF_ET08)),
+                 EToF_ET09 = ifelse(EToF_ET09 > 1.4, 1.4,ifelse(EToF_ET09 < 0, 0, EToF_ET09)),
+                 EToF_ET10 = ifelse(EToF_ET10 > 1.4, 1.4,ifelse(EToF_ET10 < 0, 0, EToF_ET10)),
+                 )
+```
+
+## Interpolation
+
+``` r
+### site filter
+selected_site <- df %>% group_by(site) %>%
+    summarise(n = sum(RS_OBS)) %>%
+    filter(n > 1) %>%
+    pull(site)
+
+df <- df %>% filter(site %in% selected_site)
+
+# linear interpolated
+# Define a safe interpolation function
+safe_approx <- function(x, y, new_x, rule = 2) {
+    # Only interpolate if there are at least 2 non-NA y values
+    if(sum(!is.na(y)) >= 2) {
+        # Use only the non-NA indices for interpolation
+        approx(x = x[!is.na(y)], y = y[!is.na(y)], 
+                     xout = new_x, method = "linear", rule = rule)$y
+    } else if(sum(!is.na(y)) == 1){
+        approx(x = x[!is.na(y)], y = y[!is.na(y)], 
+                     xout = new_x, method = "constant", rule = rule)$y
+    } else {
+        rep(NA, length(new_x))
+    }
+}
+
+# interpolation
+df <- df %>%
+    group_by(site,gap_group) %>%        
+    arrange(DATE) %>%   
+    mutate(interpolated_EToF_ET00 = safe_approx(seq_along(EToF_ET00), EToF_ET00, seq_along(EToF_ET00)),
+                 interpolated_EToF_ET01 = safe_approx(seq_along(EToF_ET01), EToF_ET01, seq_along(EToF_ET01)),
+                 interpolated_EToF_ET02 = safe_approx(seq_along(EToF_ET02), EToF_ET02, seq_along(EToF_ET02)),
+                 interpolated_EToF_ET03 = safe_approx(seq_along(EToF_ET03), EToF_ET03, seq_along(EToF_ET03)),
+                 interpolated_EToF_ET04 = safe_approx(seq_along(EToF_ET04), EToF_ET04, seq_along(EToF_ET04)),
+                 interpolated_EToF_ET05 = safe_approx(seq_along(EToF_ET05), EToF_ET05, seq_along(EToF_ET05)),
+                 interpolated_EToF_ET06 = safe_approx(seq_along(EToF_ET06), EToF_ET06, seq_along(EToF_ET06)),
+                 interpolated_EToF_ET07 = safe_approx(seq_along(EToF_ET07), EToF_ET07, seq_along(EToF_ET07)),
+                 interpolated_EToF_ET08 = safe_approx(seq_along(EToF_ET08), EToF_ET08, seq_along(EToF_ET08)),
+                 interpolated_EToF_ET09 = safe_approx(seq_along(EToF_ET09), EToF_ET09, seq_along(EToF_ET09)),
+                 interpolated_EToF_ET10 = safe_approx(seq_along(EToF_ET10), EToF_ET10, seq_along(EToF_ET10)),
+                 )
+
+# Gap-filled (GF) ET for each model
+df <- df %>%
+    mutate(GF_ET00 = interpolated_EToF_ET00 * gridMET_ETo_corr,
+                 GF_ET01 = interpolated_EToF_ET01 * gridMET_ETo_corr,
+                 GF_ET02 = interpolated_EToF_ET02 * gridMET_ETo_corr,
+                 GF_ET03 = interpolated_EToF_ET03 * gridMET_ETo_corr,
+                 GF_ET04 = interpolated_EToF_ET04 * gridMET_ETo_corr,
+                 GF_ET05 = interpolated_EToF_ET05 * gridMET_ETo_corr,
+                 GF_ET06 = interpolated_EToF_ET06 * gridMET_ETo_corr,
+                 GF_ET07 = interpolated_EToF_ET07 * gridMET_ETo_corr,
+                 GF_ET08 = interpolated_EToF_ET08 * gridMET_ETo_corr,
+                 GF_ET09 = interpolated_EToF_ET09 * gridMET_ETo_corr,
+                 GF_ET10 = interpolated_EToF_ET10 * gridMET_ETo_corr,
+                 )
+```
+
+## number of data
+
+``` r
+for(i in c(0:32)){
+
+    rmse_df <- df %>%
+        ungroup() %>%
+        group_by(class1) %>%
+        filter(nearest_distance == i & ET_OBS == T) %>%
+        summarise(ETm = mean(ET_corr,na.rm=T),
+                            distance = i,
+                            n = n()
+        ) 
+    
+    if(i == 0){
+        result <- rmse_df
+    } else{
+        result <- rbind(result,rmse_df)
+    }
+}
+
+result %>%
+    ggplot(aes(distance,n)) +
+    geom_line() + 
+    geom_point() +
+    theme_bw() +
+    labs(
+        y = "number of data", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    scale_y_log10()+
+    facet_wrap(~class1, scales = "free_y")
+```
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+
+``` r
+result %>%
+    ggplot(aes(distance, ETm)) +
+    geom_line() + 
+    geom_point() +
+    theme_bw() +
+    labs(
+        y = "mean ET (mm/day)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1, scales = "free_y")
+```
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-4-2.png)<!-- -->
+
+``` r
+result %>%
+    ggplot(aes(distance, ETm)) +
+    geom_line() + 
+    geom_point() +
+    theme_bw() +
+    labs(
+        y = "mean ET (mm/day)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1)
+```
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-4-3.png)<!-- -->
+
+## correlation
+
+``` r
+for(i in c(0:32)){
+
+    rmse_df <- df %>%
+        ungroup() %>%
+        group_by(class1) %>%
+        filter(nearest_distance == i & ET_OBS == T & !is.na(GF_ET00)) %>%
+        summarise(ETm = mean(ET_corr,na.rm=T),
+                            
+                            GF_ET00 = cor(ET_corr,GF_ET00),
+                            GF_ET01 = cor(ET_corr,GF_ET01),
+                            GF_ET02 = cor(ET_corr,GF_ET02),
+                            GF_ET03 = cor(ET_corr,GF_ET03),
+                            GF_ET04 = cor(ET_corr,GF_ET04),
+                            GF_ET05 = cor(ET_corr,GF_ET05),
+                            GF_ET06 = cor(ET_corr,GF_ET06),
+                            GF_ET07 = cor(ET_corr,GF_ET07),
+                            GF_ET08 = cor(ET_corr,GF_ET08),
+                            GF_ET09 = cor(ET_corr,GF_ET09),
+                            GF_ET10 = cor(ET_corr,GF_ET10),
+                            
+                            distance = i,
+                            n = n()
+        ) 
+    
+    if(i == 0){
+        result <- rmse_df
+    } else{
+        result <- rbind(result,rmse_df)
+    }
+}
+
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "cor", -c(class1,distance)) %>%
+    ggplot(aes(distance,cor,color = model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(
+        y = "Pearson correlation", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1, scales = "free_y")
+```
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-5-1.png)<!-- -->
+
+``` r
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "cor", -c(class1,distance)) %>%
+    ggplot(aes(distance,cor,color = model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(
+        y = "Pearson correlation", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1)
+```
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-5-2.png)<!-- -->
+
+``` r
+result %>%
+    filter(class1 == "Croplands") %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "cor", -c(class1,distance)) %>%
+    ggplot(aes(distance,cor,color = model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(title = "crop",
+        y = "Pearson correlation", 
+        x = "Temporal distance from satellite (days)"
+    )
+```
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-5-3.png)<!-- -->
+
+## Normalized RMSE
+
+``` r
+for(i in c(0:32)){
+
+    rmse_df <- df %>%
+        ungroup() %>%
+        group_by(class1) %>%
+        filter(nearest_distance == i & ET_OBS == T & !is.na(GF_ET00)) %>%
+        summarise(ETm = mean(ET_corr,na.rm=T),
+                            
+                            GF_ET00 = rmse(ET_corr,GF_ET00)/ETm,
+                            GF_ET01 = rmse(ET_corr,GF_ET01)/ETm,
+                            GF_ET02 = rmse(ET_corr,GF_ET02)/ETm,
+                            GF_ET03 = rmse(ET_corr,GF_ET03)/ETm,
+                            GF_ET04 = rmse(ET_corr,GF_ET04)/ETm,
+                            GF_ET05 = rmse(ET_corr,GF_ET05)/ETm,
+                            GF_ET06 = rmse(ET_corr,GF_ET06)/ETm,
+                            GF_ET07 = rmse(ET_corr,GF_ET07)/ETm,
+                            GF_ET08 = rmse(ET_corr,GF_ET08)/ETm,
+                            GF_ET09 = rmse(ET_corr,GF_ET09)/ETm,
+                            GF_ET10 = rmse(ET_corr,GF_ET10)/ETm,
+                            
+                            distance = i,
+                            n = n()
+        ) 
+    
+    if(i == 0){
+        result <- rmse_df
+    } else{
+        result <- rbind(result,rmse_df)
+    }
+}
+
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
+    ggplot(aes(distance,nRMSE*100,color = model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(
+        y = "Normalized RMSE (%)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1, scales = "free_y")
+```
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
+
+``` r
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
+    ggplot(aes(distance,nRMSE*100,color = model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(
+        y = "Normalized RMSE (%)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1)
+```
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-6-2.png)<!-- -->
+
+``` r
+result %>%
+    filter(class1 == "Croplands") %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
+    ggplot(aes(distance,nRMSE*100,color = model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(title = "crop",
+        y = "Normalized RMSE (%)", 
+        x = "Temporal distance from satellite (days)"
+    )
+```
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-6-3.png)<!-- -->
+
+## z-score RMSE
+
+``` r
+for(i in c(0:32)){
+
+    rmse_df <- df %>%
+        ungroup() %>%
+        group_by(class1) %>%
+        filter(nearest_distance == i & ET_OBS == T & !is.na(GF_ET00)) %>%
+        summarise(ETm = sd(ET_corr,na.rm=T),
+                            
+                            GF_ET00 = rmse(ET_corr,GF_ET00)/ETm,
+                            GF_ET01 = rmse(ET_corr,GF_ET01)/ETm,
+                            GF_ET02 = rmse(ET_corr,GF_ET02)/ETm,
+                            GF_ET03 = rmse(ET_corr,GF_ET03)/ETm,
+                            GF_ET04 = rmse(ET_corr,GF_ET04)/ETm,
+                            GF_ET05 = rmse(ET_corr,GF_ET05)/ETm,
+                            GF_ET06 = rmse(ET_corr,GF_ET06)/ETm,
+                            GF_ET07 = rmse(ET_corr,GF_ET07)/ETm,
+                            GF_ET08 = rmse(ET_corr,GF_ET08)/ETm,
+                            GF_ET09 = rmse(ET_corr,GF_ET09)/ETm,
+                            GF_ET10 = rmse(ET_corr,GF_ET10)/ETm,
+                            
+                            distance = i,
+                            n = n()
+        ) 
+    
+    if(i == 0){
+        result <- rmse_df
+    } else{
+        result <- rbind(result,rmse_df)
+    }
+}
+
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
+    ggplot(aes(distance,nRMSE*100,color = model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(
+        y = "Normalized RMSE (%)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1, scales = "free_y")
+```
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-7-1.png)<!-- -->
+
+``` r
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
+    ggplot(aes(distance,nRMSE*100,color = model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(
+        y = "Normalized RMSE (%)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1)
+```
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-7-2.png)<!-- -->
+
+``` r
+result %>%
+    filter(class1 == "Croplands") %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nRMSE", -c(class1,distance)) %>%
+    ggplot(aes(distance,nRMSE*100,color = model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(title = "crop",
+        y = "Normalized RMSE (%)", 
+        x = "Temporal distance from satellite (days)"
+    )
+```
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-7-3.png)<!-- -->
+
+## Normalized MAE
+
+``` r
+for(i in c(0:32)){
+
+    rmse_df <- df %>%
+        ungroup() %>%
+        group_by(class1) %>%
+        filter(nearest_distance == i & ET_OBS == T & !is.na(GF_ET00)) %>%
+        summarise(ETm = mean(ET_corr,na.rm=T),
+                            
+                            GF_ET00 = mae(ET_corr,GF_ET00)/ETm,
+                            GF_ET01 = mae(ET_corr,GF_ET01)/ETm,
+                            GF_ET02 = mae(ET_corr,GF_ET02)/ETm,
+                            GF_ET03 = mae(ET_corr,GF_ET03)/ETm,
+                            GF_ET04 = mae(ET_corr,GF_ET04)/ETm,
+                            GF_ET05 = mae(ET_corr,GF_ET05)/ETm,
+                            GF_ET06 = mae(ET_corr,GF_ET06)/ETm,
+                            GF_ET07 = mae(ET_corr,GF_ET07)/ETm,
+                            GF_ET08 = mae(ET_corr,GF_ET08)/ETm,
+                            GF_ET09 = mae(ET_corr,GF_ET09)/ETm,
+                            GF_ET10 = mae(ET_corr,GF_ET10)/ETm,
+                            distance = i,
+                            n = n()
+        ) 
+    
+    if(i == 0){
+        result <- rmse_df
+    } else{
+        result <- rbind(result,rmse_df)
+    }
+}
+
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+    ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(
+        y = "Normalized MAE (%)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1, scales = "free_y")
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 11 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-8-1.png)<!-- -->
+
+``` r
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+    ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(
+        y = "Normalized MAE (%)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1)
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 11 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-8-2.png)<!-- -->
+
+``` r
+result %>%
+    filter(class1 == "Croplands") %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+    ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(title = "crop",
+        y = "Normalized MAE (%)", 
+        x = "Temporal distance from satellite (days)"
+    )
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 11 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-8-3.png)<!-- -->
+
+## Normalized MAE by MAD
+
+``` r
+for(i in c(0:32)){
+
+    rmse_df <- df %>%
+        ungroup() %>%
+        group_by(class1) %>%
+        filter(nearest_distance == i & ET_OBS == T & !is.na(GF_ET00)) %>%
+        summarise(#ETm = mean(ET_corr,na.rm=T),
+                            ETm = mad(ET_corr,na.rm=T),
+                            
+                            GF_ET00 = mae(ET_corr,GF_ET00)/ETm,
+                            GF_ET01 = mae(ET_corr,GF_ET01)/ETm,
+                            GF_ET02 = mae(ET_corr,GF_ET02)/ETm,
+                            GF_ET03 = mae(ET_corr,GF_ET03)/ETm,
+                            GF_ET04 = mae(ET_corr,GF_ET04)/ETm,
+                            GF_ET05 = mae(ET_corr,GF_ET05)/ETm,
+                            GF_ET06 = mae(ET_corr,GF_ET06)/ETm,
+                            GF_ET07 = mae(ET_corr,GF_ET07)/ETm,
+                            GF_ET08 = mae(ET_corr,GF_ET08)/ETm,
+                            GF_ET09 = mae(ET_corr,GF_ET09)/ETm,
+                            GF_ET10 = mae(ET_corr,GF_ET10)/ETm,
+                            
+                            distance = i,
+                            n = n()
+        ) 
+    
+    if(i == 0){
+        result <- rmse_df
+    } else{
+        result <- rbind(result,rmse_df)
+    }
+}
+
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+    ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(
+        y = "Normalized MAE (%)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1, scales = "free_y")
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 11 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-9-1.png)<!-- -->
+
+``` r
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+    ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(
+        y = "Normalized MAE (%)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1)
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 11 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-9-2.png)<!-- -->
+
+``` r
+result %>%
+    filter(class1 == "Croplands") %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nMAE", -c(class1,distance)) %>%
+    ggplot(aes(distance,nMAE*100,color = model, shape=model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(title = "crop",
+        y = "Normalized MAE (%)", 
+        x = "Temporal distance from satellite (days)"
+    )
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 11 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-9-3.png)<!-- -->
+
+## Normalized MBE
+
+``` r
+mbe <- function (actual, predicted) {return(mean(predicted - actual,na.rm=T))}
+
+for(i in c(0:32)){
+
+    rmse_df <- df %>%
+        ungroup() %>%
+        group_by(class1) %>%
+        filter(nearest_distance == i & ET_OBS == T & !is.na(GF_ET00)) %>%
+        summarise(ETm = mean(ET_corr,na.rm=T),
+                            
+                            GF_ET00 = mbe(ET_corr,GF_ET00)/ETm,
+                            GF_ET01 = mbe(ET_corr,GF_ET01)/ETm,
+                            GF_ET02 = mbe(ET_corr,GF_ET02)/ETm,
+                            GF_ET03 = mbe(ET_corr,GF_ET03)/ETm,
+                            GF_ET04 = mbe(ET_corr,GF_ET04)/ETm,
+                            GF_ET05 = mbe(ET_corr,GF_ET05)/ETm,
+                            GF_ET06 = mbe(ET_corr,GF_ET06)/ETm,
+                            GF_ET07 = mbe(ET_corr,GF_ET07)/ETm,
+                            GF_ET08 = mbe(ET_corr,GF_ET08)/ETm,
+                            GF_ET09 = mbe(ET_corr,GF_ET09)/ETm,
+                            GF_ET10 = mbe(ET_corr,GF_ET10)/ETm,
+                            
+                            distance = i,
+                            n = n()
+        ) 
+    
+    if(i == 0){
+        result <- rmse_df
+    } else{
+        result <- rbind(result,rmse_df)
+    }
+}
+
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nMBE", -c(class1,distance)) %>%
+    ggplot(aes(distance,nMBE*100,color = model, shape=model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(
+        y = "Normalized MBE (%)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1, scales = "free_y")
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 11 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-10-1.png)<!-- -->
+
+``` r
+result %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nMBE", -c(class1,distance)) %>%
+    ggplot(aes(distance,nMBE*100,color = model, shape=model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(
+        y = "Normalized MBE (%)", 
+        x = "Temporal distance from satellite (days)"
+    ) +
+    facet_wrap(~class1)
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 11 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-10-2.png)<!-- -->
+
+``` r
+result %>%
+    filter(class1 == "Croplands") %>%
+    select(!n) %>%
+    select(!ETm) %>%
+    gather(key = "model",value = "nMBE", -c(class1,distance)) %>%
+    ggplot(aes(distance,nMBE*100,color = model, shape=model)) +
+    geom_line() + 
+    theme_bw() +
+    labs(title = "crop",
+        y = "Normalized MBE (%)", 
+        x = "Temporal distance from satellite (days)"
+    )
+```
+
+    ## Warning: The shape palette can deal with a maximum of 6 discrete values because more
+    ## than 6 becomes difficult to discriminate
+    ## ℹ you have requested 11 values. Consider specifying shapes manually if you need
+    ##   that many have them.
+
+![](2_analysis_add_random_error_files/figure-gfm/unnamed-chunk-10-3.png)<!-- -->
